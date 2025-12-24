@@ -23,8 +23,9 @@ train:
 sampling:
   percentile: 70
   batch_size: 1
-  rounds: 1
+  rounds: 3
 
 export:
+  tensorboard: runs
   video_folder: video
   model: car_racing_resnet18.pth
