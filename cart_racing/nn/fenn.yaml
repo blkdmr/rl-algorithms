@@ -1,0 +1,30 @@
+# ---------------------------------------
+# Fenn Configuration (Modify Carefully)
+# ---------------------------------------
+
+project: cart_racing
+
+# ---------------------------
+# Logging & Tracking
+# ---------------------------
+
+logger:
+  dir: logger
+
+# ---------------------------------------
+# Example of User Section
+# ---------------------------------------
+model:
+  hidden_size: 128
+
+train:
+  lr: 0.001
+
+sampling:
+  percentile: 70
+  batch_size: 1
+  rounds: 1
+
+export:
+  video_folder: video
+  model: car_racing_resnet18.pth

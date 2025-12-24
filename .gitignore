@@ -1,2 +1,4 @@
 *.json
-video/
+*.mp4
+*.pth
+logger/
