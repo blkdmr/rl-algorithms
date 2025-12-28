@@ -1,0 +1,23 @@
+# ---------------------------------------
+# Fenn Configuration (Modify Carefully)
+# ---------------------------------------
+
+project: cart_racing
+
+# ---------------------------
+# Logging & Tracking
+# ---------------------------
+
+logger:
+  dir: logger
+
+# ---------------------------------------
+# User Section
+# ---------------------------------------
+
+env:
+  max_episode_steps: 500
+
+export:
+  tensorboard: runs
+  video_folder: video

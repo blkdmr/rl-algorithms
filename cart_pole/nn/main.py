@@ -1,173 +1,257 @@
-
 import numpy as np
 from dataclasses import dataclass
 import typing as tt
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 import gymnasium as gym
-import ale_py
+import timm
+from torch.utils.tensorboard import SummaryWriter
 
-gym.register_envs(ale_py)
+from fenn import FENN
 
-HIDDEN_SIZE = 128
-BATCH_SIZE = 16
-PERCENTILE = 70
-MAX_BATCHES = 10
+# ----------------------------
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=r".*pkg_resources is deprecated as an API.*",
+    category=UserWarning,
+)
 
-class MLP(nn.Module):
-    def __init__(self, obs_size: int, hidden_size: int, n_actions: int):
-        super(MLP, self).__init__()
-        self.model = nn.Sequential(
-            nn.Linear(obs_size, hidden_size),
-            nn.ReLU(),
-            nn.Linear(hidden_size, n_actions)
-        )
+warnings.filterwarnings(
+    "ignore",
+    message=r".*Overwriting existing videos at .*",
+    category=UserWarning,
+)
+# ----------------------------
 
-    def forward(self, x: torch.Tensor):
-        return self.model(x)
+app = FENN()
+app.set_config_file("nn.yaml")
 
 @dataclass
 class EpisodeStep:
-    observation: np.ndarray
+    observation: torch.Tensor
     action: int
+
 
 @dataclass
 class Episode:
     reward: float
     steps: tt.List[EpisodeStep]
 
-# Create a trigger function (records only if we have reached MAX_BATCHES)
-# Note: Since RecordVideo tracks environment episodes, not your "batches",
-# we can trigger it based on a global flag.
-def last_batch_trigger(episode_id):
-    # This will be updated inside your loop
-    return getattr(model, 'record_now', False)
+def test_model(model: nn.Module, device:str, video_folder: str):
+    env = gym.make("CartPole-v1",
+                    render_mode="rgb_array")
 
-def record_episode(model, net):
-    model.record_now = True
-    obs, _ = model.reset()
+    env = gym.wrappers.RecordVideo(
+        env,
+        video_folder=video_folder
+    )
+
+    obs, _ = env.reset()
+
     done = False
     sm = nn.Softmax(dim=1)
 
     print("Recording final evaluation episode...")
     while not done:
-        # Match the logic used in generate_batches
-        obs_v = torch.tensor(obs.flatten(), dtype=torch.float32).unsqueeze(0)
-        act_probs_v = sm(net(obs_v))
-        # Use Argmax for a 'cleaner' video of the learned policy
-        action = np.argmax(act_probs_v.detach().numpy()[0])
+        obs_v = torch.tensor(obs, dtype=torch.float32).unsqueeze(0)
+        obs_v = obs_v.to(device)
+        with torch.no_grad():
+            act_probs_v = sm(model(obs_v))
 
-        next_obs, reward, terminated, truncated, _ = model.step(action)
+        action = np.argmax(act_probs_v.detach().cpu().numpy()[0])
+
+        next_obs, reward, terminated, truncated, _ = env.step(action)
         done = terminated or truncated
-        obs = next_obs.flatten()
+        obs = next_obs
 
-    model.record_now = False
     print("Video saved successfully.")
+    env.close()
 
-def generate_batches(env: gym.Env,
-                    model: MLP,
-                    batch_size: int) -> tt.Generator[tt.List[Episode], None, None]:
 
-    # the final batch of episodes
+def generate_batch(env: gym.Env,
+                    model: nn.Module,
+                    device: str,
+                    batch_size: int,
+                    masked:tt.List[int]=None) -> tt.List[Episode]:
+    model.eval()
+
     batch = []
-
-    # reset the env and get the first observation
     obs, _ = env.reset()
 
     episode_reward = 0.0
     episode_steps = []
 
-    # used to extract a list of action probabilities
-    # from the nn model
     sm = nn.Softmax(dim=1)
 
-    while True:
-        obs_v = torch.tensor(obs.flatten(), dtype=torch.float32)
-        act_probs_v = sm(model(obs_v.unsqueeze(0))) # retrieve the action probabilities for the first observation
-        act_probs = act_probs_v.detach().numpy()[0]
+    while len(batch) < batch_size:
+        obs_v = torch.tensor(obs.flatten(), dtype=torch.float32).unsqueeze(0)
+        obs_v = obs_v.to(device)
+        with torch.no_grad():
+            act_probs_v = sm(model(obs_v))
 
-        action = np.random.choice(len(act_probs), p=act_probs) # choose an action using that distribution
+        act_probs = act_probs_v.detach().cpu().numpy()[0]
 
-        next_obs, reward, is_done, is_trunc, _ = env.step(action) # perfom the action
+        if masked is not None:
+            for command_id in masked:
+                act_probs[command_id] = 0.0
+
+            s = act_probs.sum()
+            if s > 0:
+                act_probs /= s
+            else:
+                act_probs = act_probs_v.detach().cpu().numpy()[0]
+
+        action = np.random.choice(len(act_probs), p=act_probs)
+        next_obs, reward, is_done, is_trunc, _ = env.step(action)
 
         episode_reward += float(reward)
-        step = EpisodeStep(observation=obs.flatten(), action=action)
+        step = EpisodeStep(observation=obs_v.squeeze(0), action=action)
         episode_steps.append(step)
 
         if is_done or is_trunc:
             e = Episode(reward=episode_reward, steps=episode_steps)
             batch.append(e)
 
-            # resets everything
             episode_reward = 0.0
             episode_steps = []
             next_obs, _ = env.reset()
-            if len(batch) == batch_size:
-                yield batch
-                batch = []
 
-        obs = next_obs.flatten()
+        obs = next_obs
+
+    model.train()
+    return batch
 
 
-def filter_batch(batch: tt.List[Episode], percentile: float) -> \
-        tt.Tuple[torch.FloatTensor, torch.LongTensor, float, float]:
-    rewards = list(map(lambda s: s.reward, batch))
+def filter_batch(batch, percentile):
+    rewards = [ep.reward for ep in batch]
     reward_bound = float(np.percentile(rewards, percentile))
     reward_mean = float(np.mean(rewards))
 
-    train_obs: tt.List[np.ndarray] = []
-    train_act: tt.List[int] = []
+    # determine the number of selected episodes ("elite")
+    elite_count = sum(1 for ep in batch if ep.reward >= reward_bound)
+    elite_frac = elite_count / max(1, len(batch))
+
+    train_obs, train_act = [], []
     for episode in batch:
         if episode.reward < reward_bound:
             continue
-        train_obs.extend(map(lambda step: step.observation, episode.steps))
-        train_act.extend(map(lambda step: step.action, episode.steps))
+        for step in episode.steps:
+            train_obs.append(step.observation)
+            train_act.append(step.action)
 
-    train_obs_v = torch.FloatTensor(np.vstack(train_obs))
-    print(f"TRAIN OBS V: {train_obs_v.shape}")
-    train_act_v = torch.LongTensor(train_act)
-    return train_obs_v, train_act_v, reward_bound, reward_mean
+    obs_v = torch.stack(train_obs, dim=0)
+    act_v = torch.as_tensor(train_act, dtype=torch.long)
+
+    return obs_v, act_v, reward_bound, reward_mean, elite_frac
 
 
-# Loading the enviroment
-env = gym.make("CartPole-v1", render_mode="rgb_array")
+def _grad_norm_l2(model: nn.Module) -> float:
+    total = 0.0
+    for p in model.parameters():
+        if p.grad is None:
+            continue
+        param_norm = p.grad.detach().data.norm(2).item()
+        total += param_norm ** 2
+    return float(total ** 0.5)
 
-env = gym.wrappers.RecordVideo(
-    env,
-    video_folder="video",
-    episode_trigger=lambda x: getattr(env, 'record_now', False)
-)
 
-obs_size = 33600#env.observation_space.shape[0] #33600
-n_actions = int(env.action_space.n)
+@app.entrypoint
+def main(args):
 
-print(obs_size)
-print(n_actions)
+    env =  gym.make("CartPole-v1",
+                    render_mode="rgb_array")
 
-# Defining the model
-model = MLP(obs_size, HIDDEN_SIZE, n_actions)
-loss_fn = nn.CrossEntropyLoss()
-optimizer = optim.Adam(params=model.parameters(), lr=0.01)
+    env = gym.wrappers.TimeLimit(env, max_episode_steps=args["env"]["max_episode_steps"])
 
-batches = 0
-env.record_now = False # Initialize the flag
 
-for iter_no, batch in enumerate(generate_batches(env, model, BATCH_SIZE)):
-    obs_v, acts_v, reward_b, reward_m = filter_batch(batch, PERCENTILE)
-    optimizer.zero_grad()
-    action_scores_v = model(obs_v)
-    loss_v = loss_fn(action_scores_v, acts_v)
-    loss_v.backward()
-    optimizer.step()
-    print("%d: loss=%.3f, reward_mean=%.1f, rw_bound=%.1f" % (
-        iter_no, loss_v.item(), reward_m, reward_b))
+    obs_size = env.observation_space.shape[0]
+    n_actions = int(env.action_space.n)
 
-    batches += 1
+    print(f"Observation size: {obs_size}")
+    print(f"Actions: {n_actions}")
 
-    if batches == MAX_BATCHES:
-        record_episode(env, model)
-        break
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-env.close()
+    # ---------------------------------------------------------
+
+    # Defining the model
+    model = nn.Sequential(
+        nn.Linear(obs_size, 128),
+        nn.ReLU(),
+        nn.Linear(128, n_actions)
+    ).to(device)
+
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(params=model.parameters(), lr=args["train"]["lr"])
+    # ---------------------------------------------------------
+
+    # TensorBoard writer
+    logdir = args["export"]["tensorboard"]
+    writer = SummaryWriter(log_dir=logdir)
+
+    epoch = 0
+    model.train()
+    while epoch < args["sampling"]["epochs"]:
+        epoch += 1
+
+        batch = generate_batch(env, model, device, args["sampling"]["batch_size"])
+
+        # rollout stats from the raw batch
+        ep_len_mean = float(np.mean([len(ep.steps) for ep in batch]))
+
+        obs_v, acts_v, reward_b, reward_m, elite_frac = filter_batch(batch, args["sampling"]["percentile"])
+        obs_v = obs_v.to(device)
+        acts_v = acts_v.to(device)
+
+        optimizer.zero_grad()
+        action_scores_v = model(obs_v)
+        loss_v = loss_fn(action_scores_v, acts_v)
+        loss_v.backward()
+
+        # grad norm BEFORE optimizer step
+        grad_norm = _grad_norm_l2(model)
+
+        optimizer.step()
+
+        print("%d: loss=%.3f, reward_mean=%.1f, rw_bound=%.1f" % (
+            epoch, loss_v.item(), reward_m, reward_b))
+
+        # TensorBoard logging
+        with torch.no_grad():
+            probs = torch.softmax(action_scores_v, dim=1)
+            entropy = (-(probs * torch.log(probs + 1e-8)).sum(dim=1)).mean().item()
+            probs_mean = probs.mean(dim=0)  # (n_actions,)
+            elite_acc = (action_scores_v.argmax(dim=1) == acts_v).float().mean().item()
+
+        writer.add_scalar("rollout/ep_rew_mean", reward_m, epoch)
+        writer.add_scalar("rollout/ep_len_mean", ep_len_mean, epoch)
+        writer.add_scalar("cem/reward_bound", reward_b, epoch)
+        writer.add_scalar("cem/elite_frac", elite_frac, epoch)
+
+        writer.add_scalar("train/loss_ce", loss_v.item(), epoch)
+        writer.add_scalar("train/elite_acc", elite_acc, epoch)
+        writer.add_scalar("policy/entropy", entropy, epoch)
+        writer.add_scalar("optim/grad_norm", grad_norm, epoch)
+        writer.add_scalar("optim/lr", optimizer.param_groups[0]["lr"], epoch)
+
+        writer.add_scalars(
+            "policy/action_prob_mean",
+            {f"a{i}": probs_mean[i].item() for i in range(n_actions)},
+            epoch
+        )
+        writer.add_scalar("train/elite_samples", int(obs_v.shape[0]), epoch)
+
+    test_model(model, device, args["export"]["video_folder"])
+
+    model.eval()
+    model = model.to("cpu")
+    torch.save(model.state_dict(), args["export"]["model"])
+
+    env.close()
+    writer.close()
+
+
+if __name__ == "__main__":
+    app.run()

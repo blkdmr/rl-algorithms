@@ -1,0 +1,439 @@
+%----------------------------------------------------------------------------------------
+%    PACKAGES AND THEMES
+%----------------------------------------------------------------------------------------
+
+\documentclass[aspectratio=169,xcolor=dvipsnames]{beamer}
+\usetheme{SimplePlus}
+
+\usepackage{hyperref}
+\usepackage{graphicx} % Allows including images
+\usepackage{booktabs} % Allows the use of \toprule, \midrule and \bottomrule in tables
+\usepackage{amsmath}  % Added for math formatting
+\usepackage{amssymb}  % Added for math symbols
+\usepackage{algorithm} % Added for algorithms
+\usepackage{algpseudocode} % Added for algorithms
+\usepackage{hyperref} % Added for videos
+\usepackage{multimedia}
+\setbeamertemplate{footline}[frame number]
+
+%----------------------------------------------------------------------------------------
+%    TITLE PAGE
+%----------------------------------------------------------------------------------------
+
+\title{Introduction to Reinforcement Learning}
+
+\subtitle{From Foundations to Markov Decision Processes}
+
+% The presenter
+\author{Alessio Russo}
+
+\institute
+{
+    Department of Mathematical, Physical and Computer Sciences\\
+    University of Parma
+}
+\date{}
+
+%----------------------------------------------------------------------------------------
+%    PRESENTATION SLIDES
+%----------------------------------------------------------------------------------------
+
+\begin{document}
+
+% Slide 1: Title
+\begin{frame}[plain, noframenumbering]
+    \titlepage
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{What is Reinforcement Learning?}
+    \textbf{Reinforcement Learning (RL)} represents a third paradigm in Machine Learning, sitting between supervised and unsupervised learning.
+    
+    \vspace{0.5cm}
+    
+    \begin{itemize}
+        \item Unlike supervised learning, there are no pre-defined labels or an explicit "teacher" correcting every move.
+        \item The objective is to maximize a cumulative reward signal.
+        \item An agent learns by interacting with a dynamic environment, using feedback to adjust its strategy.
+        \item Utilizes deep neural networks (function approximation), SGD, and backpropagation, but processes data differently.
+    \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Key Challenges in RL}
+    RL is often considered more complex than standard ML due to intrinsic challenges:
+
+    \vspace{0.5cm}
+
+    \begin{enumerate}
+        \item \textbf{Non-IID Data:} Data is not Independent and Identically Distributed. Observations depend on the agent's policy; a poor policy leads to poor data coverage.
+        \item \textbf{Exploration vs. Exploitation:}
+        \begin{itemize}
+            \item \textit{Exploitation:} Using known knowledge to gain rewards.
+            \item \textit{Exploration:} Trying new actions to find potentially better strategies.
+        \end{itemize}
+        \item \textbf{Delayed Reward (Credit Assignment):} An action taken now may only yield a reward many time-steps later (e.g., a chess move leading to a checkmate).
+    \end{enumerate}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Core Components}
+    The RL architecture relies on the continuous interaction between two entities:
+    
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{The Entities:}
+        \begin{itemize}
+            \item \textbf{Agent:} The decision maker.
+            \item \textbf{Environment:} The physical or virtual world the agent interacts with.
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \textbf{The Communication Channels:}
+        \begin{itemize}
+            \item \textbf{Action ($a$):} Moves made by the agent (discrete or continuous).
+            \item \textbf{State ($s$):} The internal configuration of the environment.
+            \item \textbf{Reward ($r$):} Scalar feedback signal.
+        \end{itemize}
+    \end{columns}
+    
+    \vspace{0.5cm}
+    \textit{Note: An \textbf{Observation} is a partial perception of the full State.}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Markov Process (MP)}
+    A system is \textbf{Markovian} if the future depends only on the current state, not the history.
+    
+    \begin{block}{The Markov Property}
+        $$P(s_{t+1} | s_t) = P(s_{t+1} | s_1, s_2, \dots, s_t)$$
+    \end{block}
+    
+    The dynamics are defined by a \textbf{Transition Matrix} $T$, where cell $(i,j)$ represents the probability of moving from state $i$ to state $j$:
+    
+    $$T_{i,j} = P(S_{t+1} = j | S_t = i)$$
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Markov Reward Process (MRP)}
+    An MRP extends the MP by associating a scalar reward with states or transitions. We measure the value of being in a state.
+    
+    \begin{itemize}
+        \item \textbf{Discount Factor ($\gamma$):} Determines the present value of future rewards.
+        \begin{itemize}
+            \item $\gamma = 0$: Myopic (only immediate reward matters).
+            \item $\gamma \to 1$: Far-sighted.
+        \end{itemize}
+        \item \textbf{State Value Function $V(s)$:} The expected return starting from state $s$.
+    \end{itemize}
+    
+    \begin{equation}
+        V(s) = \mathbb{E}[G_t | S_t = s]
+    \end{equation}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Markov Decision Process (MDP)}
+    The MDP introduces \textbf{Actions} ($A$), allowing the agent to influence the dynamics.
+    
+    \begin{itemize}
+        \item The transition matrix becomes a 3D tensor $|S| \times |S| \times |A|$.
+        \item Probability of transition depends on the action taken:
+    \end{itemize}
+    
+    \begin{equation}
+        P(s' | s, a) = P(S_{t+1} = s' | S_t = s, A_t = a)
+    \end{equation}
+    
+    \begin{itemize}
+        \item The Reward function also becomes action-dependent:
+    \end{itemize}
+    
+    \begin{equation}
+        R(s, a) = \mathbb{E}[R_{t+1} | S_t = s, A_t = a]
+    \end{equation}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{The Policy ($\pi$)}
+    The \textbf{Policy} is the agent's strategy or "brain". It defines the behavior in any given state.
+    
+    \begin{block}{Stochastic Policy Definition}
+        It is a probability distribution over actions given states:
+        $$\pi(a|s) = P[A_t = a | S_t = s]$$
+    \end{block}
+    
+    \begin{itemize}
+        \item \textbf{Stochasticity:} Essential for exploration.
+        \item \textbf{Reduction:} If a policy is fixed, an MDP reduces to an MRP, as the transition probabilities become averaged over the policy's choices.
+    \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+%----------------------------------------------------------------------------------------
+%    SECTION: IMPLEMENTATION & ARCHITECTURE
+%----------------------------------------------------------------------------------------
+
+\begin{frame}{System Architecture}
+    The interaction loop can be decomposed into two main software entities:
+
+    \vspace{0.5cm}
+
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{1. The Agent}
+        \begin{itemize}
+            \item The decision-making entity.
+            \item Implements the \textbf{Policy}.
+            \item \textit{Role:} Selects action $a_t$ based on observation $o_t$.
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{2. The Environment}
+        \begin{itemize}
+            \item Everything external to the agent.
+            \item Manages internal state physics/logic.
+            \item \textit{Role:} Returns observations ($o_{t+1}$) and rewards ($r_{t+1}$) in response to actions.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]{Modeling the Environment (Python)}
+    A simplified \texttt{Environment} class manages state, constraints, and feedback.
+
+    \begin{block}{Key Methods}
+    \begin{itemize}
+        \item \texttt{get\_observation()}: Returns the current perception of state $s$.
+        \item \texttt{action(a)}: The core transition logic.
+    \end{itemize}
+    \end{block}
+
+    \vspace{-0.2cm}
+    \begin{scriptsize}
+    \begin{equation}
+        G = \sum_{t=0}^{T} R_t \quad (\text{Total accumulated reward})
+    \end{equation}
+    \end{scriptsize}
+
+    \vspace{-0.2cm}
+    \begin{exampleblock}{Transition Logic Example}
+\begin{verbatim}
+def action(self, action: int) -> float:
+    if self.is_done():
+        raise Exception("Game is over")
+    self.steps_left -= 1
+    return random.random()  # Returns Reward (R)
+\end{verbatim}
+    \end{exampleblock}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]{The Execution Loop ("Glue Code")}
+    The standard protocol of RL is universal: \textbf{Observation $\rightarrow$ Action $\rightarrow$ Reward}.
+
+    \vspace{0.5cm}
+
+    \begin{columns}
+        \column{0.6\textwidth}
+        \begin{small}
+\begin{verbatim}
+if __name__ == "__main__":
+    env = Environment()
+    agent = Agent()
+    
+    while not env.is_done():
+        # 1. Observe & Decide
+        # 2. Act & Learn
+        agent.step(env)
+        
+    print(f"Total reward: {agent.total_reward}")
+\end{verbatim}
+        \end{small}
+
+        \column{0.4\textwidth}
+        This loop persists regardless of complexity:
+        \begin{itemize}
+            \item \textbf{Environment:} From simple grids to Physics Simulators.
+            \item \textbf{Agent:} From random tables to Deep Neural Networks.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+%    SECTION: TOOLS & GYMNASIUM
+%----------------------------------------------------------------------------------------
+
+\section{Tools \& Gymnasium}
+
+\begin{frame}{Hardware \& Software Requirements}
+    To practice Deep RL, we require a specific stack of open-source tools:
+
+    \begin{itemize}
+        \item \textbf{Language:} Python 3.11+ (using Type Annotations).
+        \item \textbf{Compute:} GPU (CUDA) is highly recommended.
+        \begin{itemize}
+            \item \textit{Training time difference:} Hours vs. Days.
+            \item \textit{Alternatives:} Google Colab / Cloud Instances.
+        \end{itemize}
+        \item \textbf{Key Libraries:}
+        \begin{itemize}
+            \item \textbf{NumPy:} Matrix operations.
+            \item \textbf{PyTorch:} Deep Learning framework.
+            \item \textbf{Gymnasium:} The standard environment interface.
+        \end{itemize}
+    \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{The Gymnasium Standard}
+    Originally \textbf{OpenAI Gym} (2017), now maintained by the Farama Foundation as \textbf{Gymnasium}. It provides a unified API for environments.
+
+    \begin{block}{The \texttt{Env} Class Interface}
+    \begin{enumerate}
+        \item \textbf{Action Space:} What the agent \textit{can do} (Discrete vs. Continuous).
+        \item \textbf{Observation Space:} What the agent \textit{can see} (Shape and Bounds).
+        \item \textbf{\texttt{reset()}}: Starts a new episode, returns initial state $s_0$.
+        \item \textbf{\texttt{step(action)}}: Applies action, advances time.
+    \end{enumerate}
+    \end{block}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]{Understanding Spaces}
+    Gymnasium standardizes data structures via the \texttt{Space} class.
+    
+    \vspace{0.3cm}
+    
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{1. Discrete Space}
+        \begin{itemize}
+            \item Finite, mutually exclusive options.
+            \item Example: \texttt{Discrete(2)}
+            \item \textit{Usage:} Buttons, Grid movement.
+        \end{itemize}
+        
+        \column{0.5\textwidth}
+        \textbf{2. Box Space (Continuous)}
+        \begin{itemize}
+            \item $n$-dimensional tensor within $[low, high]$.
+            \item Example: \texttt{Box(0, 255, (210, 160, 3))}
+            \item \textit{Usage:} RGB Images, Physical sensors.
+        \end{itemize}
+    \end{columns}
+
+    \vspace{0.5cm}
+    \footnotesize{Other spaces include \texttt{Tuple}, \texttt{Dict}, and \texttt{Graph} for complex structures.}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]{The \texttt{step()} Return Values}
+    The atom of RL interaction. Calling \texttt{env.step(action)} returns a tuple:
+    
+    \begin{block}{}
+    \texttt{observation, reward, terminated, truncated, info}
+    \end{block}
+    
+    \vspace{0.2cm}
+    
+    \begin{itemize}
+        \item \textbf{Observation:} The new state ($s_{t+1}$).
+        \item \textbf{Reward:} Float value ($r_{t+1}$).
+        \item \textbf{Terminated:} Boolean. Game Over / Goal Reached. (Call \texttt{reset}).
+        \item \textbf{Truncated:} Boolean. Time limit exceeded / External stop. (Call \texttt{reset}).
+        \item \textbf{Info:} Diagnostic dictionary.
+    \end{itemize}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Case Study: CartPole-v1}
+    A classic control benchmark.
+    \textbf{Goal:} Balance a pole on a moving cart.
+    
+    \vspace{0.5cm}
+    
+    \begin{columns}
+        \column{0.6\textwidth}
+        \textbf{Observation Space (Box 4):}
+        \begin{enumerate}
+            \item Cart Position
+            \item Cart Velocity
+            \item Pole Angle
+            \item Pole Angular Velocity
+        \end{enumerate}
+        
+        \column{0.4\textwidth}
+        \textbf{Action Space (Discrete 2):}
+        \begin{itemize}
+            \item 0: Push Left
+            \item 1: Push Right
+        \end{itemize}
+        \textbf{Reward:}
+        \begin{itemize}
+            \item +1 for every step the pole remains upright.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}[fragile]{Random Agent on CartPole}
+    An agent that samples actions randomly ($\pi(a|s) = 0.5$) serves as a baseline.
+    
+    \begin{scriptsize}
+\begin{verbatim}
+import gymnasium as gym
+
+env = gym.make("CartPole-v1")
+obs, _ = env.reset()
+total_reward = 0
+
+while True:
+    action = env.action_space.sample()  # Random Action
+    obs, reward, terminated, truncated, _ = env.step(action)
+    total_reward += reward
+    
+    if terminated or truncated:
+        break
+
+print(f"Total Reward: {total_reward}")
+\end{verbatim}
+    \end{scriptsize}
+
+    \vspace{0.2cm}
+    \textbf{Result:} Average score 12-15. \textbf{Solved Threshold:} 195.0.
+\end{frame}
+
+%------------------------------------------------
+\begin{frame}{Video on the computer}
+    \centering
+    \movie[externalviewer]{\includegraphics[width=\textheight, keepaspectratio]{images/workflow.png}}{temp.mp4}
+\end{frame}
+
+\begin{frame}[plain, noframenumbering]
+    \centering
+
+    \Large{\centerline{\textbf{Thank you for your attention!}}}
+    \vspace{1.5cm}
+    \footnotesize
+    \textit{Alessio Russo}\\
+    \textit{University of Parma}
+\end{frame}
+
+%----------------------------------------------------------------------------------------
+
+\end{document}

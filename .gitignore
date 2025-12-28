@@ -1,5 +1,11 @@
 *.json
+
 *.mp4
+!slides/video/*.mp4
+
 *.pth
 logger/
 runs/
+
+main.*
+!main.tex
