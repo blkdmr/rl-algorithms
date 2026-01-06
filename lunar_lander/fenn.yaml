@@ -1,0 +1,32 @@
+# ---------------------------------------
+# Fenn Configuration (Modify Carefully)
+# ---------------------------------------
+
+project: lunar_lander
+
+# ---------------------------
+# Logging & Tracking
+# ---------------------------
+
+logger:
+  dir: logger
+
+# ---------------------------------------
+# User Section
+# ---------------------------------------
+
+env:
+  max_episode_steps: 200
+
+train:
+  lr: 1e-3
+
+sampling:
+  percentile: 80
+  batch_size: 1000
+  epochs: 20
+
+export:
+  tensorboard: runs
+  video_folder: video
+  model: lunar_lander.pth

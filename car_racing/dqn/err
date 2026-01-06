@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/home/blkdmr/university/projects/rl/car_racing/dqn/dqn.py", line 318, in <module>
+    main()
+  File "/home/blkdmr/university/projects/rl/car_racing/dqn/dqn.py", line 303, in main
+    train()
+  File "/home/blkdmr/university/projects/rl/car_racing/dqn/dqn.py", line 212, in train
+    a_t = torch.from_numpy(a).long().to(device)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+torch.AcceleratorError: CUDA error: unspecified launch failure
+Search for `cudaErrorLaunchFailure' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.

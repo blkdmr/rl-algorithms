@@ -1,0 +1,36 @@
+# ---------------------------------------
+# Fenn Configuration (Modify Carefully)
+# ---------------------------------------
+
+project: galaxian
+
+# ---------------------------
+# Logging & Tracking
+# ---------------------------
+
+logger:
+  dir: logger
+wandb:
+  entity: blkdmr-university-of-parma
+
+# ---------------------------------------
+# Example of User Section
+# ---------------------------------------
+model:
+  backbone: True
+
+env:
+  max_episode_steps: 100
+
+train:
+  lr: 0.001
+
+sampling:
+  percentile: 70
+  batch_size: 2
+  epochs: 100
+
+export:
+  tensorboard: runs
+  video_folder: video
+  model: lunar_lander_resnet18.pth

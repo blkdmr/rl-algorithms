@@ -6,6 +6,13 @@
 *.pth
 logger/
 runs/
+wandb/
 
 main.*
 !main.tex
+!main.py
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+
+.env
