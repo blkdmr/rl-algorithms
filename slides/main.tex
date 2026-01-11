@@ -204,7 +204,7 @@ Core elements:
 \begin{itemize}
     \item Action space defines what decisions are available to the agent.
     \item Observation space defines how the environment state is perceived.
-    \item \texttt{reset()} initializes an episode
+    \item \texttt{reset()} initializes an episode.
     \item \texttt{step(a)} advances the system by one interaction step.
 \end{itemize}
 
@@ -216,27 +216,26 @@ Core elements:
 
 \begin{frame}{Monte Carlo Tree Search (MCTS)}
 
-    Monte Carlo Tree Search is a planning algorithm for sequential decision making.
+Core Principle:
 
-    \vspace{0.25cm}
+\begin{itemize}
+    \item Build a partial search tree starting from the current state.
+    \item Evaluate actions by simulating future trajectories and observing their cumulative rewards.
+    \item Focus on actions that empirically lead to better long-term outcomes.
+\end{itemize}
 
-    Core idea:
-    \begin{itemize}
-        \item Decisions are evaluated by simulating possible future action sequences.
-        \item A search tree is grown incrementally from the current state.
-        \item Computational effort is focused on actions that appear promising.
-    \end{itemize}
+\vspace{0.25cm}
 
-    \vspace{0.25cm}
+Search Mechanism:
 
-    Algorithm structure:
-    \begin{itemize}
-        \item The tree alternates between states and actions.
-        \item Simulations estimate long term outcomes without requiring a learned model.
-        \item Action quality is refined through repeated sampling.
-    \end{itemize}
+\begin{itemize}
+    \item Each node represents a state, and each outgoing edge corresponds to a possible action.
+    \item Action selection balances exploring uncertain actions and exploiting actions with high estimated value.
+    \item Simulation results are backpropagated through the tree to progressively refine action value estimates.
+\end{itemize}
 
 \end{frame}
+
 
 %------------------------------------------------
 
