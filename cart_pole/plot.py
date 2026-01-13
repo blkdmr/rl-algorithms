@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# plot.py  (call: python plot.py logfile)
-import argparse
+# plot.py  (call: python plot.py)
+# Reads "mcts.log" and saves "plot.png"
+
 import re
 from pathlib import Path
 
@@ -8,62 +9,103 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+LOGFILE = Path("mcts.log")
+
+FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+
 STEP_RE = re.compile(
-    r"\[\d+\]:\s+reward=([-0-9.]+),\s+ep_return=([-0-9.]+),\s+root_visits=(\d+),\s+root_mean=([-0-9.]+),\s+best_q=([-0-9.]+)"
+    rf"""
+    \[
+        (?P<step>\d+)
+    \]:
+    \s*reward={FLOAT},
+    \s*ep_return=(?P<ep_return>{FLOAT}),
+    \s*root_visits=\d+,
+    \s*root_mean=(?P<root_mean>{FLOAT}),
+    \s*best_q=(?P<best_q>{FLOAT})
+    """,
+    re.VERBOSE,
 )
 
-EP_END_RE = re.compile(r"\[episode_end\]:\s+ep_return=([-0-9.]+),\s+ep_len=(\d+)")
+EP_END_RE = re.compile(
+    rf"\[episode_end\]:\s*ep_return=(?P<ret>{FLOAT}),\s*ep_len=(?P<len>\d+)"
+)
 
 
-def parse(text: str):
-    rewards, ep_returns, root_visits, root_mean, best_q = [], [], [], [], []
+def rolling_mean(x, window=9):
+    if window <= 1:
+        return x
+    if window % 2 == 0:
+        window += 1
+    pad = window // 2
+    xpad = np.pad(x, (pad, pad), mode="edge")
+    return np.convolve(xpad, np.ones(window) / window, mode="valid")
+
+
+def parse(text):
+    steps, ep_returns, root_mean, best_q = [], [], [], []
+
     for m in STEP_RE.finditer(text):
-        rewards.append(float(m.group(1)))
-        ep_returns.append(float(m.group(2)))
-        root_visits.append(int(m.group(3)))
-        root_mean.append(float(m.group(4)))
-        best_q.append(float(m.group(5)))
+        steps.append(int(m.group("step")))
+        ep_returns.append(float(m.group("ep_return")))
+        root_mean.append(float(m.group("root_mean")))
+        best_q.append(float(m.group("best_q")))
 
-    if not rewards:
-        raise ValueError("No step lines matched. Check the log format / regex.")
+    if not steps:
+        raise RuntimeError("No matching step lines found in mcts.log")
 
-    steps = np.arange(1, len(rewards) + 1, dtype=int)
+    end = EP_END_RE.search(text)
+    ep_len = int(end.group("len")) if end else None
+    ep_ret = float(end.group("ret")) if end else None
+
     return (
-        steps,
-        np.array(rewards, float),
-        np.array(ep_returns, float),
-        np.array(root_visits, float),
-        np.array(root_mean, float),
-        np.array(best_q, float),
+        np.array(steps),
+        np.array(ep_returns),
+        np.array(root_mean),
+        np.array(best_q),
+        ep_len,
+        ep_ret,
     )
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Plot MCTS CartPole rollout diagnostics from stdout log.")
-    ap.add_argument("logfile", type=Path)
-    args = ap.parse_args()
+    if not LOGFILE.exists():
+        raise FileNotFoundError("mcts.log not found")
 
-    text = args.logfile.read_text(encoding="utf-8", errors="replace")
-    steps, rewards, ep_returns, root_visits, root_mean, best_q = parse(text)
+    text = LOGFILE.read_text(encoding="utf-8", errors="replace")
+    steps, ep_returns, root_mean, best_q, ep_len, ep_ret = parse(text)
 
-    fig, axes = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
+    # Style
+    plt.style.use("seaborn-v0_8-whitegrid")
+    plt.rcParams.update(
+        {
+            "font.size": 11,
+            "axes.spines.top": False,
+            "axes.spines.right": False,
+        }
+    )
 
-    axes[0].plot(steps, ep_returns, marker="o", linewidth=1)
-    axes[0].set_ylabel("Episode return (running)")
-    axes[0].set_title("CartPole rollout performance")
-    axes[0].grid(True)
+    root_mean_s = rolling_mean(root_mean, 9)
+    best_q_s = rolling_mean(best_q, 9)
 
-    axes[1].plot(steps, root_mean, marker="o", linewidth=1)
-    axes[1].plot(steps, best_q, marker="o", linewidth=1)
-    axes[1].set_xlabel("Environment step")
+    fig, axes = plt.subplots(2, 1, figsize=(10, 6.5), sharex=True)
+
+    # --- Episode return ---
+    axes[0].plot(steps, ep_returns, linewidth=2)
+    axes[0].set_ylabel("Episode return")
+    axes[0].set_title("Rollout performance")
+
+    # --- MCTS values ---
+    axes[1].plot(steps, root_mean_s, linewidth=2.2, label="Root mean value")
+    axes[1].plot(steps, best_q_s, linewidth=2.2, label="Chosen child value")
     axes[1].set_ylabel("Estimated value")
-    axes[1].set_title("MCTS diagnostics")
-    axes[1].legend(["Root mean value", "Chosen child mean value"])
-    axes[1].grid(True)
+    axes[1].set_xlabel("Environment step")
+    axes[1].set_title("MCTS estimated value")
+    axes[1].legend()
 
     fig.tight_layout()
-
-    fig.savefig("plot.png", dpi=200, bbox_inches="tight")
+    fig.savefig("plot.png", dpi=220, bbox_inches="tight")
+    plt.close(fig)
 
 
 if __name__ == "__main__":

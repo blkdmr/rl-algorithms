@@ -215,24 +215,22 @@ Core elements:
 %----------------------------------------------------------------------------------------
 
 \begin{frame}{Monte Carlo Tree Search (MCTS)}
-
-Core Principle:
-
-\begin{itemize}
-    \item Build a partial search tree starting from the current state.
-    \item Evaluate actions by simulating future trajectories and observing their cumulative rewards.
-    \item Focus on actions that empirically lead to better long-term outcomes.
-\end{itemize}
+MCTS incrementally builds a partial search tree from the current state,
+using simulated trajectories to estimate action values and guide long-term decision making.
 
 \vspace{0.25cm}
+\textbf{Four Phases (one MCTS iteration)}
+\begin{enumerate}
+    \item \textbf{Selection:} starting from the root, recursively select child nodes by balancing
+    exploitation of high-value actions and exploration of less-visited ones.
+    \item \textbf{Expansion:} when a non-terminal node with unexplored actions is reached,
+    expand the tree by generating a new child node.
+    \item \textbf{Simulation (Rollout):} from the newly expanded node, simulate the environment forward
+    using a simple policy to estimate future reward.
+    \item \textbf{Backpropagation:} propagate the simulated return back through the visited nodes,
+    updating visit counts and value estimates.
+\end{enumerate}
 
-Search Mechanism:
-
-\begin{itemize}
-    \item Each node represents a state, and each outgoing edge corresponds to a possible action.
-    \item Action selection balances exploring uncertain actions and exploiting actions with high estimated value.
-    \item Simulation results are backpropagated through the tree to progressively refine action value estimates.
-\end{itemize}
 
 \end{frame}
 
@@ -264,6 +262,17 @@ Reward design:
     \item Reward accumulation directly reflects how long the pole remains balanced.
     \item Episodes terminate when the pole falls or the cart leaves the allowed range.
 \end{itemize}
+
+\end{frame}
+
+%------------------------------------------------
+
+\begin{frame}{Results for CartPole}
+
+\centering
+\includegraphics[width=0.7\textwidth]{images/results/cart_pole.png}
+
+\vspace{0.2cm}
 
 \end{frame}
 
@@ -367,10 +376,7 @@ Reward design:
 \begin{frame}{Training results for LunarLander}
 
 \centering
-\includegraphics[width=0.45\textwidth]{images/results/lunar_lander.png}
-
-\vspace{0.2cm}
-\small Training performance of CEM on the LunarLander environment
+\includegraphics[width=0.5\textwidth]{images/results/lunar_lander.png}
 
 \end{frame}
 
@@ -451,10 +457,7 @@ Reward design:
 \begin{frame}{Training results for Galaxian}
 
 \centering
-\includegraphics[width=0.45\textwidth]{images/results/galaxian.png}
-
-\vspace{0.2cm}
-\small Training performance of CEM on the Galaxian environment
+\includegraphics[width=0.5\textwidth]{images/results/galaxian.png}
 
 \end{frame}
 
